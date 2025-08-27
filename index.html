@@ -2,8 +2,8 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terminal Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>sinal</title>
     <style>
         * {
             margin: 0;
@@ -17,13 +17,22 @@
             color: #00ff00;
             height: 100vh;
             overflow: hidden;
+            -webkit-overflow-scrolling: touch;
         }
 
         .terminal {
             height: 100vh;
             display: flex;
             flex-direction: column;
-            padding: 20px;
+            padding: 10px;
+            position: relative;
+        }
+
+        @media (max-width: 768px) {
+            .terminal {
+                padding: 5px;
+                height: 100vh;
+            }
         }
 
         .setup {
@@ -60,8 +69,17 @@
         .messages {
             flex: 1;
             overflow-y: auto;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             line-height: 1.4;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .messages {
+                margin-bottom: 5px;
+                font-size: 14px;
+            }
         }
 
         .message {
@@ -73,7 +91,23 @@
             display: flex;
             align-items: center;
             border-top: 1px solid #00ff00;
-            padding-top: 10px;
+            padding: 10px 0;
+            background: #000;
+            position: sticky;
+            bottom: 0;
+            z-index: 100;
+        }
+
+        @media (max-width: 768px) {
+            .input-line {
+                padding: 5px 0;
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                padding: 10px;
+                border-top: 2px solid #00ff00;
+            }
         }
 
         .prompt {
@@ -89,6 +123,15 @@
             font-family: 'Courier New', monospace;
             font-size: 16px;
             outline: none;
+            -webkit-appearance: none;
+            -webkit-user-select: text;
+        }
+
+        @media (max-width: 768px) {
+            #messageInput {
+                font-size: 16px;
+                min-height: 20px;
+            }
         }
 
         .cursor {
@@ -128,18 +171,13 @@
     
     <div class="terminal">
         <div id="firebaseSetup" class="setup">
-            <div>> TERMINAL CHAT v1.0</div>
-            <div>></div>
-            <div>> Para funcionar entre dispositivos:</div>
-            <div>> 1. Vá em https://console.firebase.google.com</div>
-            <div>> 2. Crie projeto -> Realtime Database -> Modo teste</div>
-            <div>> 3. Cole URL do database:</div>
+            <div>> CONNECTING....</div>
             <div class="user-input">
                 <span>> </span><input type="text" id="firebaseUrl" placeholder="https://seu-projeto-default-rtdb.firebaseio.com">
             </div>
             <div>
-                <button onclick="connectFirebase()">[CONECTAR FIREBASE]</button>
-                <button onclick="useLocalMode()">[MODO LOCAL]</button>
+                <button onclick="connectFirebase()">[CONECTAR]</button>
+                <button onclick="useLocalMode()">[3256]</button>
             </div>
         </div>
 
@@ -188,9 +226,21 @@
         function setupChat() {
             const messageInput = document.getElementById('messageInput');
             
+            // Melhor controle de foco para mobile
             messageInput.addEventListener('blur', function() {
-                setTimeout(() => this.focus(), 10);
+                // No mobile, aguarda um pouco antes de focar novamente
+                setTimeout(() => {
+                    if (document.activeElement !== this) {
+                        this.focus();
+                    }
+                }, 100);
             });
+
+            // Foco inicial
+            setTimeout(() => {
+                messageInput.focus();
+                messageInput.click();
+            }, 200);
 
             messageInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
@@ -207,6 +257,19 @@
                     }
                     sendMessage();
                 }
+            });
+
+            // Para mobile - permitir toque para focar
+            messageInput.addEventListener('touchstart', function() {
+                this.focus();
+            });
+
+            // Scroll para baixo quando o teclado aparecer
+            messageInput.addEventListener('focus', function() {
+                setTimeout(() => {
+                    const messagesDiv = document.getElementById('messages');
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                }, 300);
             });
 
             renderMessages();
