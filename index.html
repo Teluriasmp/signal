@@ -16,13 +16,45 @@
             background: #000;
             color: #00ff00;
             height: 100vh;
-            padding: 20px;
+            overflow: hidden;
         }
 
         .terminal {
-            height: 100%;
+            height: 100vh;
             display: flex;
             flex-direction: column;
+            padding: 20px;
+        }
+
+        .setup {
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+
+        .setup input {
+            background: transparent;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            padding: 5px 10px;
+            margin: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        .setup button {
+            background: transparent;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            padding: 5px 15px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+
+        .setup button:hover {
+            background: #00ff00;
+            color: #000;
         }
 
         .messages {
@@ -75,39 +107,19 @@
 
         .status {
             position: absolute;
-            top: 10px;
-            right: 20px;
+            top: 5px;
+            right: 10px;
             font-size: 12px;
             opacity: 0.7;
+            z-index: 100;
         }
 
-        .setup {
-            text-align: center;
-            margin-top: 50px;
-            line-height: 1.6;
+        .user-input {
+            margin: 10px 0;
         }
 
-        .setup input {
-            background: transparent;
-            border: 1px solid #00ff00;
-            color: #00ff00;
-            padding: 10px;
-            margin: 10px;
-            font-family: 'Courier New', monospace;
-        }
-
-        .setup button {
-            background: transparent;
-            border: 1px solid #00ff00;
-            color: #00ff00;
-            padding: 10px 20px;
-            font-family: 'Courier New', monospace;
-            cursor: pointer;
-        }
-
-        .setup button:hover {
-            background: #00ff00;
-            color: #000;
+        .user-input input {
+            width: 200px;
         }
     </style>
 </head>
@@ -115,25 +127,23 @@
     <div class="status" id="status">OFFLINE</div>
     
     <div class="terminal">
-        <div id="setup" class="setup">
-            <h2>CONFIGURAÇÃO DO FIREBASE</h2>
-            <p>Para o chat funcionar entre dispositivos, você precisa:</p>
-            <br>
-            <p>1. Ir em <a href="https://console.firebase.google.com" target="_blank" style="color: #00ff00;">https://console.firebase.google.com</a></p>
-            <p>2. Criar um projeto gratuito</p>
-            <p>3. Ativar "Realtime Database"</p>
-            <p>4. Nas regras, usar: { "rules": { ".read": true, ".write": true } }</p>
-            <p>5. Copiar a URL do database aqui:</p>
-            <br>
-            <input type="text" id="firebaseUrl" placeholder="https://seu-projeto.firebaseio.com" style="width: 300px;">
-            <br>
-            <button onclick="connectFirebase()">CONECTAR</button>
-            <br><br>
-            <p style="font-size: 12px;">Ou use a versão simples (só funciona localmente):</p>
-            <button onclick="useLocalMode()">USAR MODO LOCAL</button>
+        <div id="firebaseSetup" class="setup">
+            <div>> TERMINAL CHAT v1.0</div>
+            <div>></div>
+            <div>> Para funcionar entre dispositivos:</div>
+            <div>> 1. Vá em https://console.firebase.google.com</div>
+            <div>> 2. Crie projeto -> Realtime Database -> Modo teste</div>
+            <div>> 3. Cole URL do database:</div>
+            <div class="user-input">
+                <span>> </span><input type="text" id="firebaseUrl" placeholder="https://seu-projeto-default-rtdb.firebaseio.com">
+            </div>
+            <div>
+                <button onclick="connectFirebase()">[CONECTAR FIREBASE]</button>
+                <button onclick="useLocalMode()">[MODO LOCAL]</button>
+            </div>
         </div>
 
-        <div id="chatInterface" style="display: none; height: 100%;">
+        <div id="chatInterface" style="display: none; height: 100%; flex-direction: column;">
             <div class="messages" id="messages"></div>
             <div class="input-line">
                 <span class="prompt">></span>
@@ -144,6 +154,7 @@
     </div>
 
     <script>
+        let currentUser = '';
         let firebaseUrl = '';
         let chatData = [];
         let isLocal = false;
@@ -151,14 +162,14 @@
         function connectFirebase() {
             const url = document.getElementById('firebaseUrl').value.trim();
             if (!url) {
-                alert('Digite a URL do Firebase!');
+                alert('ERRO: Digite a URL do Firebase!');
                 return;
             }
             
             firebaseUrl = url.endsWith('.json') ? url : url + '/messages.json';
-            document.getElementById('setup').style.display = 'none';
+            document.getElementById('firebaseSetup').style.display = 'none';
             document.getElementById('chatInterface').style.display = 'flex';
-            document.getElementById('status').textContent = 'CONECTADO (FIREBASE)';
+            document.getElementById('status').textContent = 'FIREBASE CONECTADO';
             
             setupChat();
             startFirebasePolling();
@@ -166,9 +177,9 @@
 
         function useLocalMode() {
             isLocal = true;
-            document.getElementById('setup').style.display = 'none';
+            document.getElementById('firebaseSetup').style.display = 'none';
             document.getElementById('chatInterface').style.display = 'flex';
-            document.getElementById('status').textContent = 'LOCAL (SÓ ESTE DISPOSITIVO)';
+            document.getElementById('status').textContent = 'MODO LOCAL';
             
             setupChat();
             startLocalPolling();
@@ -177,30 +188,28 @@
         function setupChat() {
             const messageInput = document.getElementById('messageInput');
             
-            // Focar sempre no input
             messageInput.addEventListener('blur', function() {
                 setTimeout(() => this.focus(), 10);
             });
 
-            // Enviar mensagem com Enter
             messageInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
+                    const message = this.value.trim();
+                    if (message.toLowerCase() === 'clear') {
+                        clearChatForAll();
+                        this.value = '';
+                        return;
+                    }
+                    if (message.toLowerCase() === 'clearall') {
+                        clearChatForAll();
+                        this.value = '';
+                        return;
+                    }
                     sendMessage();
                 }
             });
 
-            // Comando clear
-            messageInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    const message = this.value.trim().toLowerCase();
-                    if (message === 'clear') {
-                        clearChat();
-                        this.value = '';
-                        e.preventDefault();
-                        return;
-                    }
-                }
-            });
+            renderMessages();
         }
 
         function sendMessage() {
@@ -240,11 +249,11 @@
             })
             .then(response => response.json())
             .then(data => {
-                console.log('Mensagem enviada:', data);
+                console.log('> MENSAGEM ENVIADA');
             })
             .catch(error => {
-                console.error('Erro ao enviar:', error);
-                document.getElementById('status').textContent = 'ERRO DE CONEXÃO';
+                console.error('> ERRO AO ENVIAR:', error);
+                document.getElementById('status').textContent = 'ERRO DE CONEXAO';
             });
         }
 
@@ -260,12 +269,10 @@
                 if (data) {
                     chatData = Object.values(data).sort((a, b) => a.id - b.id);
                     renderMessages();
-                    document.getElementById('status').textContent = 'CONECTADO (FIREBASE)';
                 }
             })
             .catch(error => {
-                console.error('Erro ao carregar:', error);
-                document.getElementById('status').textContent = 'ERRO DE CONEXÃO';
+                console.error('> ERRO AO CARREGAR:', error);
             });
         }
 
@@ -273,7 +280,6 @@
             const savedData = localStorage.getItem('chatData');
             if (savedData) {
                 chatData = JSON.parse(savedData);
-                renderMessages();
             }
             
             setInterval(() => {
@@ -292,6 +298,14 @@
             const messagesContainer = document.getElementById('messages');
             messagesContainer.innerHTML = '';
             
+            if (chatData.length === 0) {
+                const welcomeMsg = document.createElement('div');
+                welcomeMsg.className = 'message';
+                welcomeMsg.innerHTML = '> AGUARDANDO MENSAGENS...';
+                messagesContainer.appendChild(welcomeMsg);
+                return;
+            }
+            
             chatData.forEach(msg => {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = 'message';
@@ -302,14 +316,65 @@
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
 
+        function clearChatForAll() {
+            if (isLocal) {
+                // Modo local - limpa localStorage
+                localStorage.removeItem('chatData');
+                chatData = [];
+                renderMessages();
+                
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message';
+                messageDiv.innerHTML = '> CHAT LIMPO';
+                document.getElementById('messages').appendChild(messageDiv);
+            } else {
+                // Modo Firebase - deleta todas as mensagens
+                fetch(firebaseUrl.replace('/messages.json', '.json'), {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        chatData = [];
+                        renderMessages();
+                        
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = 'message';
+                        messageDiv.innerHTML = '> CHAT LIMPO PARA TODOS';
+                        document.getElementById('messages').appendChild(messageDiv);
+                    } else {
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = 'message';
+                        messageDiv.innerHTML = '> ERRO AO LIMPAR CHAT';
+                        document.getElementById('messages').appendChild(messageDiv);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao limpar Firebase:', error);
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'message';
+                    messageDiv.innerHTML = '> ERRO DE CONEXAO AO LIMPAR';
+                    document.getElementById('messages').appendChild(messageDiv);
+                });
+            }
+        }
+
         function clearChat() {
             if (isLocal) {
                 localStorage.removeItem('chatData');
                 chatData = [];
                 document.getElementById('messages').innerHTML = '';
+                const welcomeMsg = document.createElement('div');
+                welcomeMsg.className = 'message';
+                welcomeMsg.innerHTML = '> CHAT LIMPO';
+                document.getElementById('messages').appendChild(welcomeMsg);
             } else {
-                // Para Firebase, você precisaria implementar a limpeza
-                console.log('Clear não implementado para Firebase');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message';
+                messageDiv.innerHTML = '> USE "clear" PARA LIMPAR PARA TODOS';
+                document.getElementById('messages').appendChild(messageDiv);
             }
         }
     </script>
