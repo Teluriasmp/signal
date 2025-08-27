@@ -72,32 +72,136 @@
             opacity: 0.7;
             font-size: 12px;
         }
+
+        .status {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        .setup {
+            text-align: center;
+            margin-top: 50px;
+            line-height: 1.6;
+        }
+
+        .setup input {
+            background: transparent;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            padding: 10px;
+            margin: 10px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .setup button {
+            background: transparent;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            padding: 10px 20px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+        }
+
+        .setup button:hover {
+            background: #00ff00;
+            color: #000;
+        }
     </style>
 </head>
 <body>
+    <div class="status" id="status">OFFLINE</div>
+    
     <div class="terminal">
-        <div class="messages" id="messages"></div>
-        <div class="input-line">
-            <span class="prompt">></span>
-            <input type="text" id="messageInput" autofocus>
-            <span class="cursor">_</span>
+        <div id="setup" class="setup">
+            <h2>CONFIGURAÇÃO DO FIREBASE</h2>
+            <p>Para o chat funcionar entre dispositivos, você precisa:</p>
+            <br>
+            <p>1. Ir em <a href="https://console.firebase.google.com" target="_blank" style="color: #00ff00;">https://console.firebase.google.com</a></p>
+            <p>2. Criar um projeto gratuito</p>
+            <p>3. Ativar "Realtime Database"</p>
+            <p>4. Nas regras, usar: { "rules": { ".read": true, ".write": true } }</p>
+            <p>5. Copiar a URL do database aqui:</p>
+            <br>
+            <input type="text" id="firebaseUrl" placeholder="https://seu-projeto.firebaseio.com" style="width: 300px;">
+            <br>
+            <button onclick="connectFirebase()">CONECTAR</button>
+            <br><br>
+            <p style="font-size: 12px;">Ou use a versão simples (só funciona localmente):</p>
+            <button onclick="useLocalMode()">USAR MODO LOCAL</button>
+        </div>
+
+        <div id="chatInterface" style="display: none; height: 100%;">
+            <div class="messages" id="messages"></div>
+            <div class="input-line">
+                <span class="prompt">></span>
+                <input type="text" id="messageInput" autofocus>
+                <span class="cursor">_</span>
+            </div>
         </div>
     </div>
 
     <script>
+        let firebaseUrl = '';
         let chatData = [];
+        let isLocal = false;
 
-        // Focar sempre no input
-        document.getElementById('messageInput').addEventListener('blur', function() {
-            setTimeout(() => this.focus(), 10);
-        });
-
-        // Enviar mensagem com Enter
-        document.getElementById('messageInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                sendMessage();
+        function connectFirebase() {
+            const url = document.getElementById('firebaseUrl').value.trim();
+            if (!url) {
+                alert('Digite a URL do Firebase!');
+                return;
             }
-        });
+            
+            firebaseUrl = url.endsWith('.json') ? url : url + '/messages.json';
+            document.getElementById('setup').style.display = 'none';
+            document.getElementById('chatInterface').style.display = 'flex';
+            document.getElementById('status').textContent = 'CONECTADO (FIREBASE)';
+            
+            setupChat();
+            startFirebasePolling();
+        }
+
+        function useLocalMode() {
+            isLocal = true;
+            document.getElementById('setup').style.display = 'none';
+            document.getElementById('chatInterface').style.display = 'flex';
+            document.getElementById('status').textContent = 'LOCAL (SÓ ESTE DISPOSITIVO)';
+            
+            setupChat();
+            startLocalPolling();
+        }
+
+        function setupChat() {
+            const messageInput = document.getElementById('messageInput');
+            
+            // Focar sempre no input
+            messageInput.addEventListener('blur', function() {
+                setTimeout(() => this.focus(), 10);
+            });
+
+            // Enviar mensagem com Enter
+            messageInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+
+            // Comando clear
+            messageInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    const message = this.value.trim().toLowerCase();
+                    if (message === 'clear') {
+                        clearChat();
+                        this.value = '';
+                        e.preventDefault();
+                        return;
+                    }
+                }
+            });
+        }
 
         function sendMessage() {
             const messageInput = document.getElementById('messageInput');
@@ -112,31 +216,66 @@
                     minute: '2-digit',
                     second: '2-digit'
                 }),
-                id: Date.now()
+                id: Date.now() + Math.random()
             };
             
-            // Adicionar à lista local
-            chatData.push(messageObj);
-            
-            // Salvar no localStorage 
-            localStorage.setItem('chatData', JSON.stringify(chatData));
-            
-            // Limpar input
             messageInput.value = '';
             
-            // Atualizar interface
-            renderMessages();
+            if (isLocal) {
+                chatData.push(messageObj);
+                localStorage.setItem('chatData', JSON.stringify(chatData));
+                renderMessages();
+            } else {
+                sendToFirebase(messageObj);
+            }
         }
 
-        function startPolling() {
-            // Carregar mensagens existentes
+        function sendToFirebase(messageObj) {
+            fetch(firebaseUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(messageObj)
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Mensagem enviada:', data);
+            })
+            .catch(error => {
+                console.error('Erro ao enviar:', error);
+                document.getElementById('status').textContent = 'ERRO DE CONEXÃO';
+            });
+        }
+
+        function startFirebasePolling() {
+            loadFromFirebase();
+            setInterval(loadFromFirebase, 1000);
+        }
+
+        function loadFromFirebase() {
+            fetch(firebaseUrl)
+            .then(response => response.json())
+            .then(data => {
+                if (data) {
+                    chatData = Object.values(data).sort((a, b) => a.id - b.id);
+                    renderMessages();
+                    document.getElementById('status').textContent = 'CONECTADO (FIREBASE)';
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao carregar:', error);
+                document.getElementById('status').textContent = 'ERRO DE CONEXÃO';
+            });
+        }
+
+        function startLocalPolling() {
             const savedData = localStorage.getItem('chatData');
             if (savedData) {
                 chatData = JSON.parse(savedData);
                 renderMessages();
             }
             
-            // Polling para novas mensagens
             setInterval(() => {
                 const savedData = localStorage.getItem('chatData');
                 if (savedData) {
@@ -160,27 +299,19 @@
                 messagesContainer.appendChild(messageDiv);
             });
             
-            // Scroll para a última mensagem
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
 
-        // Inicializar
-        startPolling();
-        
-        // Comando para limpar (digite 'clear')
-        document.getElementById('messageInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                const message = this.value.trim().toLowerCase();
-                if (message === 'clear') {
-                    localStorage.removeItem('chatData');
-                    chatData = [];
-                    document.getElementById('messages').innerHTML = '';
-                    this.value = '';
-                    e.preventDefault();
-                    return;
-                }
+        function clearChat() {
+            if (isLocal) {
+                localStorage.removeItem('chatData');
+                chatData = [];
+                document.getElementById('messages').innerHTML = '';
+            } else {
+                // Para Firebase, você precisaria implementar a limpeza
+                console.log('Clear não implementado para Firebase');
             }
-        });
+        }
     </script>
 </body>
 </html>
