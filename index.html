@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal Chat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #00ff00;
+            height: 100vh;
+            padding: 20px;
+        }
+
+        .terminal {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+
+        .message {
+            margin-bottom: 5px;
+            word-wrap: break-word;
+        }
+
+        .input-line {
+            display: flex;
+            align-items: center;
+            border-top: 1px solid #00ff00;
+            padding-top: 10px;
+        }
+
+        .prompt {
+            color: #00ff00;
+            margin-right: 10px;
+        }
+
+        #messageInput {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            outline: none;
+        }
+
+        .cursor {
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        .timestamp {
+            opacity: 0.7;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal">
+        <div class="messages" id="messages"></div>
+        <div class="input-line">
+            <span class="prompt">></span>
+            <input type="text" id="messageInput" autofocus>
+            <span class="cursor">_</span>
+        </div>
+    </div>
+
+    <script>
+        let chatData = [];
+
+        // Focar sempre no input
+        document.getElementById('messageInput').addEventListener('blur', function() {
+            setTimeout(() => this.focus(), 10);
+        });
+
+        // Enviar mensagem com Enter
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            
+            if (!message) return;
+            
+            const messageObj = {
+                text: message,
+                timestamp: new Date().toLocaleTimeString('pt-BR', { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    second: '2-digit'
+                }),
+                id: Date.now()
+            };
+            
+            // Adicionar à lista local
+            chatData.push(messageObj);
+            
+            // Salvar no localStorage 
+            localStorage.setItem('chatData', JSON.stringify(chatData));
+            
+            // Limpar input
+            messageInput.value = '';
+            
+            // Atualizar interface
+            renderMessages();
+        }
+
+        function startPolling() {
+            // Carregar mensagens existentes
+            const savedData = localStorage.getItem('chatData');
+            if (savedData) {
+                chatData = JSON.parse(savedData);
+                renderMessages();
+            }
+            
+            // Polling para novas mensagens
+            setInterval(() => {
+                const savedData = localStorage.getItem('chatData');
+                if (savedData) {
+                    const newData = JSON.parse(savedData);
+                    if (newData.length !== chatData.length) {
+                        chatData = newData;
+                        renderMessages();
+                    }
+                }
+            }, 500);
+        }
+
+        function renderMessages() {
+            const messagesContainer = document.getElementById('messages');
+            messagesContainer.innerHTML = '';
+            
+            chatData.forEach(msg => {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message';
+                messageDiv.innerHTML = `<span class="timestamp">[${msg.timestamp}]</span> ${msg.text}`;
+                messagesContainer.appendChild(messageDiv);
+            });
+            
+            // Scroll para a última mensagem
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // Inicializar
+        startPolling();
+        
+        // Comando para limpar (digite 'clear')
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                const message = this.value.trim().toLowerCase();
+                if (message === 'clear') {
+                    localStorage.removeItem('chatData');
+                    chatData = [];
+                    document.getElementById('messages').innerHTML = '';
+                    this.value = '';
+                    e.preventDefault();
+                    return;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
